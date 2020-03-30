@@ -1,28 +1,18 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 
 import sys
 import os
 import logging
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
+from io import StringIO
 import mechanize
-try:
-    from cookielib import Cookie, LWPCookieJar as CookieJar
-except ImportError:
-    from http.cookiejar import Cookie, CookieJar
+from http.cookiejar import Cookie, CookieJar
 import struct
 import ssl
 import base64
 import collections
 import zlib
-try:
-    import HTMLParser
-except ImportError:
-    import html.parser as HTMLParser
+import html.parser as HTMLParser
 import socket
 try:
     import netifaces
