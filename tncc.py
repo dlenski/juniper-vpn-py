@@ -5,7 +5,6 @@ import sys
 import os
 import logging
 from io import StringIO
-import mechanize
 from http.cookiejar import Cookie, CookieJar
 import struct
 import ssl
@@ -14,16 +13,18 @@ import collections
 import zlib
 import html.parser as HTMLParser
 import socket
+import platform
+import datetime
+import xml.etree.ElementTree
+
+import pyasn1_modules.pem
+import pyasn1_modules.rfc2459
+import pyasn1.codec.der.decoder
+import mechanize
 try:
     import netifaces
 except ImportError:
     netifaces = None
-import platform
-import datetime
-import pyasn1_modules.pem
-import pyasn1_modules.rfc2459
-import pyasn1.codec.der.decoder
-import xml.etree.ElementTree
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
