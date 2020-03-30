@@ -8,7 +8,6 @@ import StringIO
 import mechanize
 import cookielib
 import struct
-import socket
 import ssl
 import base64
 import collections
@@ -16,10 +15,7 @@ import zlib
 import HTMLParser
 import socket
 import netifaces
-import urlgrabber
-import urllib2
 import platform
-import json
 import datetime
 import pyasn1_modules.pem
 import pyasn1_modules.rfc2459
