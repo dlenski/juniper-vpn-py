@@ -206,13 +206,10 @@ class x509cert(object):
         ret = dict()
         for i in range(0, len(data)):
             for attr in data[i]:
-                type = str(attr.getComponentByPosition(0).getComponentByName('type'))
-                value = str(attr.getComponentByPosition(0).getComponentByName('value'))
-                value = str(pyasn1.codec.der.decoder.decode(value)[0])
-                try:
-                    ret[type].append(value)
-                except:
-                    ret[type] = [value]
+                type = str(attr.getComponentByPosition(0).getComponentByName('type')) # dotted-quad (e.g. '2.5.4.10' = organization)
+                value = attr.getComponentByPosition(0).getComponentByName('value')    # bytes representing value
+                value = str(pyasn1.codec.der.decoder.decode(value)[0])                # literal stringified value (e.g. 'Bigcorp Inc.')
+                ret.setdefault(type, []).append(value)
         return ret
 
     @staticmethod
@@ -330,7 +327,7 @@ class tncc(object):
                 try:
                     key, val = line.split('=', 1)
                     response[key] = val
-                except:
+                except ValueError:
                     pass
                 last_key = key
         logging.debug('Parsed response:\n\t%s', '\n\t'.join('%r: %r,' % pair for pair in response.items()))
@@ -353,7 +350,7 @@ class tncc(object):
                                 try:
                                     key, value = field.split('=', 1)
                                     d[key] = value
-                                except:
+                                except ValueError:
                                     pass
                             objs.append(d)
         p = ParamHTMLParser()
