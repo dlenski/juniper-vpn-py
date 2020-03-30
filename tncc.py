@@ -83,7 +83,7 @@ def decode_0ce4(buf, indent):
 def decode_0ce5(buf, indent):
     s = struct.unpack(str(len(buf)) + "s", buf)[0]
     logging.debug('%scmd 0ce5 (string) %d bytes', indent, len(buf))
-    s = s.rstrip('\0')
+    s = s.rstrip(b'\0')
     logging.debug('%s', s)
     return s
 
@@ -92,11 +92,11 @@ def decode_0ce7(buf, indent):
     id, s = struct.unpack(">I" + str(len(buf) - 4) + "s", buf)
     logging.debug('%scmd 0ce7 (id %08x string) %d bytes', indent, id, len(buf))
 
-    if s.startswith('COMPRESSED:'):
+    if s.startswith(b'COMPRESSED:'):
         typ, length, data = s.split(':', 2)
         s = zlib.decompress(data)
 
-    s = s.rstrip('\0')
+    s = s.rstrip(b'\0')
     logging.debug('%s', s)
     return (id, s)
 
@@ -112,7 +112,7 @@ def decode_0cf0(buf, indent):
 def decode_0cf1(buf, indent):
     s = struct.unpack(str(len(buf)) + "s", buf)[0]
     logging.debug('%scmd 0cf1 (string) %d bytes', indent, len(buf))
-    s = s.rstrip('\0')
+    s = s.rstrip(b'\0')
     logging.debug('%s', s)
     return s
 
@@ -182,7 +182,7 @@ def encode_0ce5(s):
 
 # 0ce7 - string with hex prefixer
 def encode_0ce7(s, prefix):
-    s += '\0'
+    s += b'\0'
     return encode_packet(0x0ce7, 1, struct.pack(">I" + str(len(s)) + "sx",
                                 prefix, s))
 
@@ -192,7 +192,7 @@ def encode_0cf0(buf):
 
 # 0cf1 - string without hex prefixer
 def encode_0cf1(s):
-    s += '\0'
+    s += b'\0'
     return encode_packet(0x0ce5, 1, struct.pack(str(len(s)) + "s", s))
 
 # 0cf3 - u32
@@ -321,7 +321,7 @@ class tncc(object):
         response = dict()
         last_key = ''
         for line in self.r.readlines():
-            line = line.strip()
+            line = line.strip().decode()
             # Note that msg is too long and gets wrapped, handle it special
             if last_key == 'msg' and len(line):
                 response['msg'] += line
@@ -333,6 +333,7 @@ class tncc(object):
                 except:
                     pass
                 last_key = key
+        logging.debug('Parsed response:\n\t%s', '\n\t'.join('%r: %r,' % pair for pair in response.items()))
         return response
 
     def parse_policy_response(self, msg_data):
@@ -397,12 +398,12 @@ class tncc(object):
 
         msg += "</ClientAttributes>  </FunkMessage>"
 
-        return encode_0ce7(msg, MSG_FUNK_PLATFORM)
+        return encode_0ce7(msg.encode(), MSG_FUNK_PLATFORM)
 
     def gen_funk_present(self):
         msg = "<FunkMessage VendorID='2636' ProductID='1' Version='1' Platform='%s' ClientType='Agentless'> " % self.platform
         msg += "<Present SequenceID='0'></Present>  </FunkMessage>"
-        return encode_0ce7(msg, MSG_FUNK)
+        return encode_0ce7(msg.encode(), MSG_FUNK)
 
     def gen_funk_response(self, certs):
 
@@ -414,7 +415,7 @@ class tncc(object):
             msg += "<Attribute Name='%s' Value='%s' />" % (name, value.data.strip())
         msg += "</ClientAttributes>  </FunkMessage>"
 
-        return encode_0ce7(msg, MSG_FUNK)
+        return encode_0ce7(msg.encode(), MSG_FUNK)
 
     def gen_policy_request(self):
         policy_blocks = collections.OrderedDict({
@@ -440,7 +441,7 @@ class tncc(object):
             v = ''.join([ '%s=%s;' % (k, v) for k, v in policy_val.items()])
             msg += '<parameter name="%s" value="%s">' % (policy_key, v)
 
-        return encode_0ce7(msg, 0xa4c18)
+        return encode_0ce7(msg.encode(), 0xa4c18)
 
     def gen_policy_response(self, policy_objs):
         # Make a set of policies
@@ -462,7 +463,7 @@ class tncc(object):
                 # Default action
                 msg += 'OK\n'
 
-        return encode_0ce7(msg, MSG_POLICY)
+        return encode_0ce7(msg.encode(), MSG_POLICY)
 
     def get_cookie(self, dspreauth=None, dssignin=None):
 
@@ -479,19 +480,19 @@ class tncc(object):
                 self.set_cookie('DSSIGNIN', dssignin)
 
         inner = self.gen_policy_request()
-        inner += encode_0ce7('policy request\x00v4', MSG_POLICY)
+        inner += encode_0ce7(b'policy request\x00v4', MSG_POLICY)
         if self.funk:
             inner += self.gen_funk_platform()
             inner += self.gen_funk_present()
 
-        msg_raw = encode_0013(encode_0ce4(inner) + encode_0ce5('Accept-Language: en') + encode_0cf3(1))
+        msg_raw = encode_0013(encode_0ce4(inner) + encode_0ce5(b'Accept-Language: en') + encode_0cf3(1))
         logging.debug('Sending packet -')
         decode_packet(msg_raw)
 
         post_attrs = {
             'connID': '0',
             'timestamp': '0',
-            'msg': base64.b64encode(msg_raw),
+            'msg': base64.b64encode(msg_raw).decode(),
             'firsttime': '1'
         }
         if self.deviceid:
@@ -516,9 +517,9 @@ class tncc(object):
         req_certs = dict()
         for str_id, sub_str in sub_strings:
             if str_id == MSG_POLICY:
-                policy_objs += self.parse_policy_response(sub_str)
+                policy_objs += self.parse_policy_response(sub_str.decode())
             elif str_id == MSG_FUNK:
-                req_certs = self.parse_funk_response(sub_str)
+                req_certs = self.parse_funk_response(sub_str.decode())
 
         if debug:
             for obj in policy_objs:
@@ -552,18 +553,18 @@ class tncc(object):
             if cert_id not in certs:
                 logging.warn('Could not find certificate for %s', str(req_dns))
 
-        inner = ''
+        inner = b''
         if certs:
             inner += self.gen_funk_response(certs)
         inner += self.gen_policy_response(policy_objs)
 
-        msg_raw = encode_0013(encode_0ce4(inner) + encode_0ce5('Accept-Language: en'))
+        msg_raw = encode_0013(encode_0ce4(inner) + encode_0ce5(b'Accept-Language: en'))
         logging.debug('Sending packet -')
         decode_packet(msg_raw)
 
         post_attrs = {
             'connID': '1',
-            'msg': base64.b64encode(msg_raw),
+            'msg': base64.b64encode(msg_raw).decode(),
             'firsttime': '1'
         }
 
