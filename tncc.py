@@ -24,7 +24,10 @@ try:
 except ImportError:
     import html.parser as HTMLParser
 import socket
-import netifaces
+try:
+    import netifaces
+except ImportError:
+    netifaces = None
 import platform
 import datetime
 import pyasn1_modules.pem
@@ -607,13 +610,16 @@ if __name__ == "__main__":
         mac_addrs = [n.strip() for n in os.environ['TNCC_HWADDR'].split(',')]
     else:
         mac_addrs = []
-        for iface in netifaces.interfaces():
-            try:
-                mac = netifaces.ifaddresses(iface)[netifaces.AF_LINK][0]['addr']
-                assert mac != '00:00:00:00:00:00'
-                mac_addrs.append(mac)
-            except:
-                pass
+        if netifaces is None:
+            logging.warn("No netifaces module; mac_addrs will be empty.")
+        else:
+            for iface in netifaces.interfaces():
+                try:
+                    mac = netifaces.ifaddresses(iface)[netifaces.AF_LINK][0]['addr']
+                    assert mac != '00:00:00:00:00:00'
+                    mac_addrs.append(mac)
+                except:
+                    pass
 
     hostname = os.environ.get('TNCC_HOSTNAME', socket.gethostname())
 
