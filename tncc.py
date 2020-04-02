@@ -213,7 +213,6 @@ class x509cert(object):
         tz = 0
 
         if tm_str[-1] == 'Z':
-            tz = 0
             tm_str = tm_str[:-1]
         elif '-' in tm_str:
             tm_str, tz = tm_str.split('-')
@@ -223,17 +222,13 @@ class x509cert(object):
             tm_str, tz = tm_str.split('+')
             tz = datetime.datetime.strptime(tz, '%H%M')
             tz = tz.hour * 60 + tz.minute
-        else:
-            logging.warn('No timezone in certificate')
+        elif tm.getName() != 'utcTime':
+            log.warn('No timezone in certificate')
 
-        if tm.getName() == 'generalTime':
-            formats = ['%Y%m%d%H%M%S.%f', '%Y%m%d%H%M%S', '%Y%m%d%H%M', '%Y%m%d%H']
-        elif tm.getName() == 'utcTime':
-            formats = ['%y%m%d%H%M%S', '%y%m%d%H%M']
-        else:
-            raise Exception('Unknown time format')
+        if tm.getName() not in ('generalTime', 'utcTime'):
+            raise Exception('Unknown time format %s' % tm.getName())
 
-        for fmt in formats:
+        for fmt in ['%Y%m%d%H%M%S.%f', '%Y%m%d%H%M%S', '%Y%m%d%H%M', '%Y%m%d%H']:
             try:
                 ret = datetime.datetime.strptime(tm_str, fmt)
                 ret += datetime.timedelta(minutes=tz)
