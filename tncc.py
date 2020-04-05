@@ -17,10 +17,13 @@ import platform
 import datetime
 import xml.etree.ElementTree
 
-import pyasn1_modules.pem
-import pyasn1_modules.rfc2459
-import pyasn1.codec.der.decoder
 import mechanize
+try:
+    import pyasn1_modules.pem
+    import pyasn1_modules.rfc2459
+    import pyasn1.codec.der.decoder
+except ImportError:
+    pyasn1 = pyasn1_modules = None
 try:
     import netifaces
 except ImportError:
@@ -610,15 +613,18 @@ if __name__ == "__main__":
     hostname = os.environ.get('TNCC_HOSTNAME', socket.gethostname())
 
     certs = []
-    if 'TNCC_CERTS' in os.environ:
-        now = datetime.datetime.now()
-        for f in os.environ['TNCC_CERTS'].split(','):
-            cert = x509cert(f.strip())
-            if now < cert.not_before:
-                logging.warn('WARNING: %s is not yet valid', f)
-            if now > cert.not_after:
-                logging.warn('WARNING: %s is expired', f)
-            certs.append(cert)
+    if pyasn1 and pyasn1_modules:
+        if 'TNCC_CERTS' in os.environ:
+            now = datetime.datetime.now()
+            for f in os.environ['TNCC_CERTS'].split(','):
+                cert = x509cert(f.strip())
+                if now < cert.not_before:
+                    logging.warn('WARNING: %s is not yet valid', f)
+                if now > cert.not_after:
+                    logging.warn('WARNING: %s is expired', f)
+                certs.append(cert)
+    else:
+        raise Exception('TNCC_CERTS environment variable set, but pyasn1 and/or pyasn1_modules could not be imported')
 
     # \HKEY_CURRENT_USER\Software\Juniper Networks\Device Id
     device_id = os.environ.get('TNCC_DEVICE_ID')
