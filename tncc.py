@@ -15,6 +15,7 @@ import html.parser as HTMLParser
 import socket
 import platform
 import datetime
+import hashlib
 import xml.etree.ElementTree
 
 import mechanize
@@ -551,6 +552,19 @@ class tncc_server(object):
             # FIXME: Support for periodic updates
             dsid_value = args['Cookie']
 
+def fingerprint_checking_SSLSocket(_fingerprint):
+    class SSLSocket(ssl.SSLSocket):
+        fingerprint = _fingerprint
+        def do_handshake(self, *args, **kw):
+            res = super().do_handshake(*args, **kw)
+            der_bytes = self.getpeercert(True)
+            cert = asn1crypto.x509.Certificate.load(der_bytes)
+            pubkey = cert.public_key.dump()
+            pin_sha256 = base64.b64encode(hashlib.sha256(pubkey).digest()).decode()
+            if pin_sha256 != self.fingerprint:
+                raise Exception("Server fingerprint %s does not match expected pin-sha256:%s" % (pin_sha256, self.fingerprint))
+    return SSLSocket
+
 if __name__ == "__main__":
     vpn_host = sys.argv[1]
 
@@ -574,6 +588,17 @@ if __name__ == "__main__":
                     pass
 
     hostname = os.environ.get('TNCC_HOSTNAME', socket.gethostname())
+
+    fingerprint = os.environ.get('TNCC_SHA256')
+    if not fingerprint:
+        logging.warn("TNCC_SHA256 not set, will not validate server certificate")
+    elif not asn1crypto:
+        logging.warn("asn1crypto module not available, will not validate server certificate")
+    else:
+        # we need to monkey-patch this, because SSLContext.sslsocket_class isn't
+        # available until Python 3.7
+        # https://docs.python.org/3/library/ssl.html#ssl.SSLContext.wrap_socket
+        ssl.SSLSocket = fingerprint_checking_SSLSocket(fingerprint)
 
     certs = []
     if asn1crypto:
