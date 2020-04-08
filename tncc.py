@@ -19,11 +19,9 @@ import xml.etree.ElementTree
 
 import mechanize
 try:
-    import pyasn1_modules.pem
-    import pyasn1_modules.rfc2459
-    import pyasn1.codec.der.decoder
+    import asn1crypto.pem, asn1crypto.x509
 except ImportError:
-    pyasn1 = pyasn1_modules = None
+    asn1crypto = None
 try:
     import netifaces
 except ImportError:
@@ -199,60 +197,25 @@ def encode_0cf3(i):
 class x509cert(object):
 
     @staticmethod
-    def decode_names(data):
+    def decode_names(names):
         ret = dict()
-        for i in range(0, len(data)):
-            for attr in data[i]:
-                type = str(attr.getComponentByPosition(0).getComponentByName('type')) # dotted-quad (e.g. '2.5.4.10' = organization)
-                value = attr.getComponentByPosition(0).getComponentByName('value')    # bytes representing value
-                value = str(pyasn1.codec.der.decoder.decode(value)[0])                # literal stringified value (e.g. 'Bigcorp Inc.')
+        for name in names.chosen:
+            for attr in name:
+                type = attr['type'].dotted    # dotted-quad value (e.g. '2.5.4.10' = organization)
+                value = attr['value'].native  # literal string value (e.g. 'Bigcorp Inc.')
                 ret.setdefault(type, []).append(value)
         return ret
-
-    @staticmethod
-    def decode_time(tm):
-
-        tm_str = tm.getComponent()._value
-        tz = 0
-
-        if tm_str[-1] == 'Z':
-            tm_str = tm_str[:-1]
-        elif '-' in tm_str:
-            tm_str, tz = tm_str.split('-')
-            tz = datetime.datetime.strptime(tz, '%H%M')
-            tz = -(tz.hour * 60 + tz.minute)
-        elif '+' in tm_str:
-            tm_str, tz = tm_str.split('+')
-            tz = datetime.datetime.strptime(tz, '%H%M')
-            tz = tz.hour * 60 + tz.minute
-        elif tm.getName() != 'utcTime':
-            log.warn('No timezone in certificate')
-
-        if tm.getName() not in ('generalTime', 'utcTime'):
-            raise Exception('Unknown time format %s' % tm.getName())
-
-        for fmt in ['%Y%m%d%H%M%S.%f', '%Y%m%d%H%M%S', '%Y%m%d%H%M', '%Y%m%d%H']:
-            try:
-                ret = datetime.datetime.strptime(tm_str, fmt)
-                ret += datetime.timedelta(minutes=tz)
-                return ret
-            except:
-                pass
-
-        raise Exception('Could not parse certificate time')
 
     def __init__(self, cert_file):
         with open(cert_file, 'r') as f:
             self.data = f.read()
-        f = StringIO(self.data)
-        substrate = pyasn1_modules.pem.readPemFromFile(f)
-        cert = pyasn1.codec.der.decoder.decode(substrate, pyasn1_modules.rfc2459.Certificate())[0]
-        tbs = cert.getComponentByName('tbsCertificate')
-        self.issuer = self.decode_names(tbs.getComponentByName('issuer'))
-        validity = tbs.getComponentByName('validity')
-        self.not_before = self.decode_time(validity.getComponentByName("notBefore"))
-        self.not_after = self.decode_time(validity.getComponentByName("notAfter"))
-        self.subject = self.decode_names(tbs.getComponentByName('subject'))
+        type_name, headers, der_bytes = asn1crypto.pem.unarmor(self.data.encode())
+        cert = asn1crypto.x509.Certificate.load(der_bytes)
+        tbs = cert['tbs_certificate']
+        self.issuer = self.decode_names(tbs['issuer'])
+        self.not_before = tbs['validity']['not_before'].native.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        self.not_after = tbs['validity']['not_after'].native.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        self.subject = self.decode_names(tbs['subject'])
 
 class tncc(object):
     def __init__(self, vpn_host, device_id=None, funk=None, platform=None, hostname=None, mac_addrs=[], certs=[]):
@@ -613,9 +576,9 @@ if __name__ == "__main__":
     hostname = os.environ.get('TNCC_HOSTNAME', socket.gethostname())
 
     certs = []
-    if pyasn1 and pyasn1_modules:
+    if asn1crypto:
         if 'TNCC_CERTS' in os.environ:
-            now = datetime.datetime.now()
+            now = datetime.datetime.utcnow()
             for f in os.environ['TNCC_CERTS'].split(','):
                 cert = x509cert(f.strip())
                 if now < cert.not_before:
@@ -624,7 +587,7 @@ if __name__ == "__main__":
                     logging.warn('WARNING: %s is expired', f)
                 certs.append(cert)
     else:
-        raise Exception('TNCC_CERTS environment variable set, but pyasn1 and/or pyasn1_modules could not be imported')
+        raise Exception('TNCC_CERTS environment variable set, but asn1crypto module is not available')
 
     # \HKEY_CURRENT_USER\Software\Juniper Networks\Device Id
     device_id = os.environ.get('TNCC_DEVICE_ID')
